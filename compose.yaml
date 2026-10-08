@@ -1,0 +1,458 @@
+name: media-server
+
+# Komodo-managed stack on murderbot. Non-secret paths: paths.env; secrets: .env
+# (hydrated by pre-deploy.sh from secrets.yaml). Ingress/TLS is k3s Traefik.
+
+x-dns: &dns-servers
+  - 1.1.1.1
+  - 8.8.8.8
+
+services:
+  profilarr:
+    container_name: profilarr
+    image: santiagosayshey/profilarr:v1.1.4
+    ports:
+      - 6868:6868
+    volumes:
+      - ${PROFILARR_CONFIG}:/config
+    environment:
+      - TZ=America/New_York
+    networks:
+      servarr:
+    dns: *dns-servers
+    restart: unless-stopped
+
+  prowlarr:
+    container_name: prowlarr
+    image: linuxserver/prowlarr:2.3.5
+    networks:
+      servarr:
+    dns: *dns-servers
+    ports:
+      - 9696:9696
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+    volumes:
+      - ${PROWLARR_CONFIG}:/config
+    restart: unless-stopped
+
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd:5.0.3
+    container_name: sabnzbd
+    networks:
+      servarr:
+    dns: *dns-servers
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+    ports:
+      - 8081:8080
+    volumes:
+      - ${SABNZBD_CONFIG}:/config
+      - ${USENET_DOWNLOADS}:/downloads
+      - ${USENET_DOWNLOADS_INCOMPLETE}:/incomplete-downloads
+    restart: unless-stopped
+
+  radarr:
+    container_name: radarr
+    image: lscr.io/linuxserver/radarr:6.1.1
+    networks:
+      servarr:
+    dns: *dns-servers
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+    ports:
+      - 7878:7878
+    volumes:
+      - ${RADARR_CONFIG}:/config
+      - ${MOVIES_FOLDER}:/movies
+      - ${USENET_DOWNLOADS}:/downloads
+    restart: unless-stopped
+
+  sonarr:
+    image: linuxserver/sonarr:4.0.17
+    container_name: sonarr
+    networks:
+      servarr:
+    dns: *dns-servers
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+    volumes:
+      - ${SONARR_CONFIG}:/config
+      - ${TV_FOLDER}:/tv
+      - ${USENET_DOWNLOADS}:/downloads
+    ports:
+      - 8989:8989
+    restart: unless-stopped
+
+  sonarr-missing-search-cron:
+    # Sonarr has no built-in recurring "search for missing episodes" task —
+    # see murderbot/media-server/config/sonarr-cron/crontab.txt for why this
+    # exists. Same crond shape as mac-mini-m4/docker-maintenance.
+    container_name: sonarr-missing-search-cron
+    image: docker:27-cli
+    command: ["sh", "-c", "crond -f -l 8"]
+    environment:
+      - SONARR_API_KEY=${SONARR_API_KEY}
+    volumes:
+      - ./config/sonarr-cron/crontab.txt:/etc/crontabs/root:ro
+    networks:
+      servarr:
+    dns: *dns-servers
+    restart: unless-stopped
+
+  bazarr:
+    container_name: bazarr
+    image: linuxserver/bazarr:1.5.6
+    networks:
+      servarr:
+    dns: *dns-servers
+    ports:
+      - 6767:6767
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+    volumes:
+      - ${BAZARR_CONFIG}:/config
+      - ${TV_FOLDER}:/tv
+      - ${MOVIES_FOLDER}:/movies
+    restart: unless-stopped
+
+  jellyfin-config-init:
+    # Jellyfin rewrites its own config, so versioned files are copied in
+    # (not bind-mounted) on every deploy. See CLAUDE.md "anime plugins".
+    container_name: jellyfin-config-init
+    image: busybox:1.37
+    user: "1000:1000"
+    command:
+      - sh
+      - -c
+      - |
+        mkdir -p /jf/data/plugins/configurations &&
+        cp /src/network.xml /jf/network.xml &&
+        cp /src/Jellyfin.Plugin.*.xml /jf/data/plugins/configurations/
+    volumes:
+      - ${JELLYFIN_CONFIG}:/jf
+      - ./config/jellyfin:/src:ro
+    restart: "no"
+
+  jellyfin:
+    image: linuxserver/jellyfin:10.11.11
+    container_name: jellyfin
+    networks:
+      servarr:
+    dns: *dns-servers
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - JELLYFIN_PublishedServerUrl=$JELLYFIN_URL
+      # Mitigation for known EF Core/SQLite "database is locked" contention under
+      # concurrent access (scans + playback + multiple simultaneous downloads) —
+      # open since 10.9/10.10, not fully fixed as of 10.11.8. Reduces lock frequency,
+      # does not eliminate it. See forum.jellyfin.org/t-sqlite-error-database-is-locked
+      - JELLYFIN_SQLITE__disableSecondLevelCache=true
+    volumes:
+      - ${JELLYFIN_CONFIG}:/config
+      - ${MOVIES_FOLDER}:/movies
+      - ${TV_FOLDER}:/tv
+      - ${DISCOVER_FOLDER}:/discover
+      - ${TRANSCODE_FOLDER}:/transcode
+    ports:
+      - 8096:8096
+      - 7359:7359/udp
+      - 8920:8920
+    # Prefer NVIDIA when available (nvidia-container-toolkit); keep /dev/dri for VAAPI fallback.
+    gpus: all
+    devices:
+      - /dev/dri:/dev/dri
+    mem_swappiness: 0
+    # INC-2026-08-30: Jellyfin had no healthcheck at all, so when host-level
+    # swap exhaustion starved it of CPU/iowait, `docker ps` kept showing "Up"
+    # the whole time nothing detected the ~2.5min stream outage this caused.
+    # This only catches app-level unresponsiveness (matches Komodo's own
+    # health display) -- it does not fix or detect the host resource
+    # exhaustion itself, see host-resource-alerts.yml for that.
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-o", "/dev/null", "http://localhost:8096/health"]
+      start_period: 30s
+      timeout: 5s
+      interval: 30s
+      retries: 3
+    restart: unless-stopped
+
+  seerr:
+    image: ghcr.io/seerr-team/seerr:v3.2.0
+    init: true
+    container_name: seerr
+    networks:
+      servarr:
+    dns: *dns-servers
+    environment:
+      - TZ=America/New_York
+      - PORT=5055
+    ports:
+      - 5055:5055
+    volumes:
+      - ${SEERR_CONFIG}:/app/config
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:5055/api/v1/settings/public || exit 1
+      start_period: 20s
+      timeout: 3s
+      interval: 15s
+      retries: 3
+    restart: unless-stopped
+
+  maintainerr:
+    container_name: maintainerr
+    image: ghcr.io/maintainerr/maintainerr:3.27.0
+    user: "1000:1000"
+    networks:
+      servarr:
+    dns: *dns-servers
+    environment:
+      - TZ=America/New_York
+    volumes:
+      - ${MAINTAINERR_CONFIG}:/opt/data
+    ports:
+      - 6246:6246
+    restart: unless-stopped
+
+  # ── Book acquisition/library stack (legacy, being retired — Phase 3/4 of
+  # shelfarr-migration.md) ────────────────────────────────────────────────
+  # calibre owns the canonical library (metadata.db, Author/Title/ tree,
+  # calibredb) at CALIBRE_LIBRARY_FOLDER. calibre-web is the read-facing
+  # OPDS/browsing frontend over the same library. LazyLibrarian (the third
+  # leg — searched/acquired via prowlarr/sabnzbd, imported via calibredb)
+  # was removed 2026-09-09 per Alex's explicit call: shelfarr/BookOrbit is
+  # the production stack now, LazyLibrarian's own data was never worth
+  # keeping. calibre/calibre-web stay running only until the old library
+  # is imported into BookOrbit (see bookorbit-app's MIGRATION_IMPORT_ROOT
+  # below) and Phase 4 retires them too.
+
+  calibre:
+    container_name: calibre
+    image: lscr.io/linuxserver/calibre:9.11.0
+    networks:
+      servarr:
+    dns: *dns-servers
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - HARDCOVER_API_KEY=${HARDCOVER_API_KEY}
+    volumes:
+      - ${CALIBRE_CONFIG}:/config
+      - ${CALIBRE_LIBRARY_FOLDER}:/books
+      - ./config/calibre-init:/custom-cont-init.d:ro
+    ports:
+      - 8082:8080 # noVNC desktop GUI, HTTP — LAN-only, no public ingress.
+                  # NOT 8080: that's already bound on this host by
+                  # zigbee2mqtt's frontend (network_mode: host), missed by
+                  # the original port audit since it only grepped murderbot's
+                  # own compose.yaml files, not mac-mini-m4/automation's
+                  # (zigbee2mqtt evidently also runs on this physical host).
+    shm_size: "1gb"
+    security_opt:
+      - seccomp:unconfined
+    restart: unless-stopped
+
+  calibre-web:
+    container_name: calibre-web
+    image: lscr.io/linuxserver/calibre-web:0.6.26
+    networks:
+      servarr:
+    dns: *dns-servers
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      # No DOCKER_MODS here on purpose — calibre already owns calibredb and
+      # is the one writer to the library; calibre-web only reads metadata.db
+      # natively, no mod needed. Fewer moving parts, fewer things to break.
+      - HARDCOVER_TOKEN=${HARDCOVER_API_KEY}
+    volumes:
+      - ${CALIBREWEB_CONFIG}:/config
+      - ${CALIBRE_LIBRARY_FOLDER}:/books
+      - ./config/calibre-web/hardcover.py:/app/calibre-web/cps/metadata_provider/hardcover.py:ro
+    ports:
+      - 8083:8083
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-o", "/dev/null", "http://localhost:8083/"]
+      start_period: 20s
+      timeout: 5s
+      interval: 30s
+      retries: 3
+    restart: unless-stopped
+
+  # One source of truth for book metadata: previously LazyLibrarian set the
+  # ISBN on import (via its OPF, see calibre_integration.py) for this
+  # sidecar to pick up — LazyLibrarian is gone as of 2026-09-09, so no new
+  # books get an ISBN tagged this way. Left running only to keep syncing
+  # already-tagged books until calibre/calibre-web themselves are retired
+  # in Phase 4. Pulls canonical title/authors/series/tags from Hardcover
+  # via calibredb — restricted to the Hardcover source only
+  # (--allowed-plugin), no merging with Amazon/Google. Reuses the calibre
+  # image (calibredb/fetch-ebook-metadata are headless CLI tools, no
+  # Xvfb/GUI needed) but skips s6 entirely via a bare entrypoint override.
+  # Books with no ISBN identifier (e.g. only a goodreads id) are a known
+  # gap — not handled here.
+  calibre-metadata-sync:
+    container_name: calibre-metadata-sync
+    image: lscr.io/linuxserver/calibre:9.11.0
+    entrypoint: ["/bin/bash", "/sync-scripts/loop.sh"]
+    networks:
+      servarr:
+    dns: *dns-servers
+    volumes:
+      - ${CALIBRE_CONFIG}:/config
+      - ${CALIBRE_LIBRARY_FOLDER}:/books
+      - ./config/calibre-sync:/sync-scripts:ro
+    restart: unless-stopped
+
+  # ── shelfarr + BookOrbit (Phase 3 of the LazyLibrarian→shelfarr
+  # migration — cutover, this is now the production book stack) ─────────────
+  # Everything below writes to BOOKS_LIBRARY_* paths (renamed from
+  # BOOKS_TRIAL_* in Phase 3 — no "trial"-named paths in a production
+  # stack), never CALIBRE_LIBRARY_FOLDER — the old calibre library is
+  # imported in via BookOrbit's own Migration UI (see
+  # BOOKORBIT_MIGRATION_IMPORTS_FOLDER below), then retired in Phase 4. See
+  # Obsidian Projects/Media Server Stack/Plans/shelfarr-migration.md and its
+  # background note for the full decision record (BookOrbit's own sync now
+  # replaces libsync/kosync, superseding the earlier "kosync mandatory"
+  # gate — see Plans/audiobookshelf-setup.md Phase 4; shelfarr is the sole
+  # acquisition/curation gate — BookOrbit's own request/indexer feature is
+  # deliberately left unconfigured).
+  #
+  # shelfarr replaces LazyLibrarian: auto-selects a single best release per
+  # request instead of grabbing every match. Reuses the existing
+  # prowlarr/sabnzbd — wire those up via Settings > Indexers / Download
+  # Clients in its own UI post-deploy, not via env vars.
+  shelfarr:
+    container_name: shelfarr
+    image: ghcr.io/pedro-revez-silva/shelfarr:2026.08.31.1
+    networks:
+      servarr:
+    dns: *dns-servers
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      # Required for shelfarr's background job supervisor (bin/jobs) to run
+      # at all — without it, searches/downloads/scheduled tasks/health
+      # checks all sit permanently Enqueued and never execute. See
+      # upstream docker-compose.example.yml.
+      - SOLID_QUEUE_IN_PUMA=1
+    volumes:
+      - ${SHELFARR_CONFIG}:/rails/storage
+      - ${BOOKS_LIBRARY_EBOOKS_FOLDER}:/ebooks
+      - ${BOOKS_LIBRARY_AUDIOBOOKS_FOLDER}:/audiobooks
+      - ${BOOKS_LIBRARY_COMICS_FOLDER}:/comics
+      - ${USENET_DOWNLOADS}:/downloads
+    ports:
+      - 5056:80
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-o", "/dev/null", "http://localhost/up"]
+      start_period: 30s
+      timeout: 5s
+      interval: 30s
+      retries: 3
+    restart: unless-stopped
+
+  # BookOrbit replaces calibre-web as the trial serving layer: dedicated
+  # KOReader plugin (on-device catalog browser/download — the Boox Onyx Go
+  # 7 runs real KOReader) plus plain OPDS (the XTeink X3's CrossPoint
+  # firmware). Runs its own bundled Postgres (pgvector/pg18, as shipped
+  # upstream) instead of the shared mac-mini-m4 instance, to avoid an
+  # untested extension/version mismatch during this trial.
+  bookorbit-app:
+    container_name: bookorbit-app
+    image: ghcr.io/bookorbit/bookorbit:2.8.1
+    init: true
+    networks:
+      servarr:
+    dns: *dns-servers
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - POSTGRES_HOST=bookorbit-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=bookorbit
+      - POSTGRES_PASSWORD=${BOOKORBIT_POSTGRES_PASSWORD}
+      - POSTGRES_DB=bookorbit
+      - JWT_SECRET=${BOOKORBIT_JWT_SECRET}
+      - SETUP_BOOTSTRAP_TOKEN=${BOOKORBIT_SETUP_BOOTSTRAP_TOKEN}
+      - APP_URL=${BOOKORBIT_APP_URL}
+      # Phase 3 calibre-library import: BookOrbit's own Settings > Migration
+      # wizard ("Calibre-Web Automated" source, snapshot mode) reads a
+      # stopped-snapshot app.db + metadata.db pair from a read-only mount
+      # rooted here. Works against stock calibre-web's app.db too (verified
+      # against bookorbit/bookorbit's own connector source — it only warns,
+      # doesn't refuse, when CWA-specific tables are absent). Encryption key
+      # protects the stored source connection config at rest, same pattern
+      # as EMAIL_ENCRYPTION_KEY.
+      - MIGRATION_IMPORT_ROOT=/imports
+      - MIGRATION_ENCRYPTION_KEY=${BOOKORBIT_MIGRATION_ENCRYPTION_KEY}
+      - TZ=America/New_York
+      - PUID=1000
+      - PGID=1000
+    depends_on:
+      bookorbit-db:
+        condition: service_healthy
+    volumes:
+      - ${BOOKS_LIBRARY_ROOT}:/books
+      - ${BOOKORBIT_DATA_FOLDER}:/data
+      - ${BOOKORBIT_MIGRATION_IMPORTS_FOLDER}:/imports:ro
+    ports:
+      - 3005:3000
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  bookorbit-db:
+    container_name: bookorbit-db
+    # Major-version tag only — same pattern as recyclarr above; upstream
+    # doesn't publish patch-level pgvector/PG tags.
+    image: pgvector/pgvector:pg18
+    networks:
+      servarr:
+    dns: *dns-servers
+    environment:
+      - POSTGRES_USER=bookorbit
+      - POSTGRES_PASSWORD=${BOOKORBIT_POSTGRES_PASSWORD}
+      - POSTGRES_DB=bookorbit
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - ${BOOKORBIT_POSTGRES_DATA}:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bookorbit -d bookorbit"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+
+networks:
+   servarr:
+     driver: bridge

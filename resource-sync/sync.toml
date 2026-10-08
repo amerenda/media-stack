@@ -1,0 +1,14 @@
+# Komodo ResourceSync definition (self-referential). Changes to resource-sync/*.toml
+# on main are applied by this sync.
+
+[[resource_sync]]
+name = "media-stack"
+description = "Komodo ResourceSync for the media-server stack"
+tags = ["murderbot", "media"]
+[resource_sync.config]
+managed = true
+webhook_enabled = true
+repo = "amerenda/media-stack"
+branch = "main"
+resource_path = ["resource-sync/stacks.toml", "resource-sync/sync.toml"]
+git_account = "amerenda"

@@ -1,0 +1,43 @@
+# Komodo ResourceSync: servers and the media-server stack.
+# NOTE: Komodo joins multi-line pre_deploy commands with ' && ', so bash functions
+# and if/then/else blocks cannot be used there; call a script instead.
+
+# Periphery on murderbot is bootstrapped by Ansible
+# (playbooks/infrastructure/setup-debian-komodo.yml in ansible-playbooks).
+
+[[server]]
+name = "murderbot"
+description = "Debian home server (10.100.20.19) — media-server stack"
+tags = ["murderbot"]
+[server.config]
+address = "https://10.100.20.19:8120"
+enabled = true
+# Intentionally empty: Core uses its global passkey (KOMODO_PASSKEY_FILE →
+# komodo-dean-passkey on the Mac Mini), which must match PERIPHERY_PASSKEYS on
+# the Periphery host. Do NOT use [[KOMODO_PERIPHERY_PASSKEY]] here — Core can persist the
+# placeholder literally and you get "Invalid passkey" even when the Variable is correct.
+passkey = ""
+
+[[stack]]
+name = "media-server"
+description = "Jellyfin, *arr suite, sabnzbd, seerr, book stack; repo amerenda/media-stack; TLS via k3s Traefik"
+tags = ["murderbot", "media"]
+deploy = true
+[stack.config]
+server = "murderbot"
+repo = "amerenda/media-stack"
+branch = "main"
+file_paths = ["compose.yaml"]
+additional_env_files = ["paths.env"]
+# One-shot copy container; exits 0 by design, must not mark the stack unhealthy.
+ignore_services = ["jellyfin-config-init"]
+git_account = "amerenda"
+project_name = "media-server"
+webhook_force_deploy = true
+# Removes containers for services deleted from compose.yaml (e.g. recyclarr).
+extra_args = ["--remove-orphans"]
+[stack.config.pre_deploy]
+command = """
+export BWS_ACCESS_TOKEN=$(cat /run/secrets/bws-access-token)
+bash pre-deploy.sh
+"""

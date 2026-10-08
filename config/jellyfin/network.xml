@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<NetworkConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <BaseUrl />
+  <EnableHttps>false</EnableHttps>
+  <RequireHttps>false</RequireHttps>
+  <CertificatePath />
+  <CertificatePassword />
+  <InternalHttpPort>8096</InternalHttpPort>
+  <InternalHttpsPort>8920</InternalHttpsPort>
+  <PublicHttpPort>8096</PublicHttpPort>
+  <PublicHttpsPort>8920</PublicHttpsPort>
+  <AutoDiscovery>true</AutoDiscovery>
+  <EnableUPnP>false</EnableUPnP>
+  <EnableIPv4>true</EnableIPv4>
+  <EnableIPv6>false</EnableIPv6>
+  <EnableRemoteAccess>true</EnableRemoteAccess>
+  <LocalNetworkSubnets>
+    <string>10.100.20.0/24</string>
+  </LocalNetworkSubnets>
+  <LocalNetworkAddresses />
+  <!--
+    KnownProxies: only the k3s pod CIDR (Traefik's source range) belongs here.
+    Do NOT list 10.100.20.0/24 — that treats every LAN device (including the
+    Google Home Display / Chromecast) as a trusted reverse proxy, causing
+    Jellyfin to look for X-Forwarded-For on direct Cast connections and
+    potentially mis-identify the client IP or apply the wrong published URL rule.
+  -->
+  <KnownProxies>
+    <string>10.42.0.0/16</string>
+  </KnownProxies>
+  <IgnoreVirtualInterfaces>true</IgnoreVirtualInterfaces>
+  <VirtualInterfaceNames>
+    <string>veth</string>
+  </VirtualInterfaceNames>
+  <EnablePublishedServerUriByRequest>true</EnablePublishedServerUriByRequest>
+  <PublishedServerUriBySubnet>
+    <string>10.100.20.0/24=http://10.100.20.19:8096</string>
+  </PublishedServerUriBySubnet>
+  <RemoteIPFilter />
+  <IsRemoteIPFilterBlacklist>false</IsRemoteIPFilterBlacklist>
+</NetworkConfiguration>

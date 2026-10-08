@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PluginConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <TitlePreference>Localized</TitlePreference>
+  <OriginalTitlePreference>JapaneseRomaji</OriginalTitlePreference>
+  <IgnoreSeason>false</IgnoreSeason>
+  <!-- Raised from 50 → 95. At 50, Hollywood movies like "Obsession" and
+       "Gladiator II" matched unrelated hentai titles, contaminating their
+       metadata with anime genres, plots, and actors across 63+ movies.
+       AniDB must still be disabled per-library for Movies/TV in the
+       Jellyfin admin UI (Libraries → Edit → Metadata Sources). -->
+  <TitleSimilarityThreshold>95</TitleSimilarityThreshold>
+  <MaxGenres>5</MaxGenres>
+  <TidyGenreList>true</TidyGenreList>
+  <TitleCaseGenres>false</TitleCaseGenres>
+  <AnimeDefaultGenre>Anime</AnimeDefaultGenre>
+  <AniDbRateLimit>2000</AniDbRateLimit>
+  <MaxCacheAge>7</MaxCacheAge>
+  <AniDbReplaceGraves>true</AniDbReplaceGraves>
+</PluginConfiguration>

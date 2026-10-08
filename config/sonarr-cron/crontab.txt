@@ -1,0 +1,8 @@
+# Daily 4am America/New_York — trigger Sonarr's MissingEpisodeSearch across
+# the whole library. Sonarr has no built-in recurring task for this: RSS Sync
+# (15 min) only catches new releases as indexers post them, and Refresh
+# Monitored Downloads (1 min) only polls downloads already queued. Anything
+# Sonarr failed to grab on first air (indexer outage, bad release, etc.) sits
+# missing forever without this. Confirmed valid command on this instance
+# (v4.0.17.2952) via manual POST /api/v3/command 2026-08-28.
+0 4 * * * wget -q -O - --header="X-Api-Key: $SONARR_API_KEY" --header="Content-Type: application/json" --post-data='{"name":"MissingEpisodeSearch"}' http://sonarr:8989/sonarr/api/v3/command >> /var/log/sonarr-missing-search.log 2>&1
