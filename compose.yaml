@@ -461,6 +461,9 @@ services:
       - ${MEILISEARCH_DATA}:/meli_data
     environment:
       - TZ=America/New_York
+      - MEILI_ENV: production
+      - MEILI_NO_ANALYTICS: "true"
+      - MEILI_MASTER_KEY: ${MEILISEARCH_MASTER_KEY}
     networks:
       servarr:
     dns: *dns-servers
