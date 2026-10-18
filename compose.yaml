@@ -452,6 +452,20 @@ services:
       start_period: 20s
     restart: unless-stopped
 
+  meilisearch:
+    container_name: meilisearch 
+    image: getmeili/meilisearch:v1.34
+    ports:
+      - 7700:7700
+    volumes:
+      - ${MEILISEARCH_DATA}:/meli_data
+    environment:
+      - TZ=America/New_York
+    networks:
+      servarr:
+    dns: *dns-servers
+    restart: unless-stopped
+
 
 networks:
    servarr:
