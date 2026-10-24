@@ -54,6 +54,7 @@ services:
       - ${SABNZBD_CONFIG}:/config
       - ${USENET_DOWNLOADS}:/downloads
       - ${USENET_DOWNLOADS_INCOMPLETE}:/incomplete-downloads
+      - ${WHISPARR_MOVIES}/generic:/xxx-generic
     restart: unless-stopped
 
   radarr:
