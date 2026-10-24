@@ -77,6 +77,9 @@ services:
       - TZ=America/New_York
     volumes:
       - ${GLUETUN_CONFIG}:/gluetun
+    healthcheck:
+      start_period: 3m
+      start_interval: 5s
     networks:
       servarr:
     ports:
