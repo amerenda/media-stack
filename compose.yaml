@@ -166,6 +166,7 @@ services:
       - ${TV_FOLDER}:/tv
       - ${DISCOVER_FOLDER}:/discover
       - ${TRANSCODE_FOLDER}:/transcode
+      - ${WHISPARR_MOVIES}:/xxx
     ports:
       - 8096:8096
       - 7359:7359/udp
