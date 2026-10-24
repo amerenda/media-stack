@@ -226,6 +226,24 @@ services:
       - 6246:6246
     restart: unless-stopped
 
+  whisparr:
+    container_name: whisparr
+    image: thespad/whisparr:v3
+    ports:
+      - 6969:6969
+    volumes:
+      - ${WHISPARR_CONFIG}:/config
+      - ${WHISPARR_MOVIES}:/movies
+      - ${USENET_DOWNLOADS}:/downloads
+    environment:
+      - TZ=America/New_York
+      - PUID=1000
+      - PGID=1000
+    networks:
+      servarr:
+    dns: *dns-servers
+    restart: unless-stopped
+
   # ── Book acquisition/library stack (legacy, being retired — Phase 3/4 of
   # shelfarr-migration.md) ────────────────────────────────────────────────
   # calibre owns the canonical library (metadata.db, Author/Title/ tree,
@@ -468,7 +486,6 @@ services:
       servarr:
     dns: *dns-servers
     restart: unless-stopped
-
 
 networks:
    servarr:
