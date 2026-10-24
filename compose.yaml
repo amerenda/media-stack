@@ -57,6 +57,51 @@ services:
       - ${WHISPARR_MOVIES}/generic:/xxx-generic
     restart: unless-stopped
 
+  # qBittorrent shares gluetun's network namespace: no tunnel, no network.
+  # 8090 is qBittorrent's WebUI; 8888 is gluetun's HTTP proxy (Prowlarr),
+  # reachable on the servarr network only.
+  gluetun:
+    container_name: gluetun
+    image: qmcgaw/gluetun:v3.41.3
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - VPN_SERVICE_PROVIDER=nordvpn
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${NORDVPN_WIREGUARD_PRIVATE_KEY}
+      - SERVER_COUNTRIES=United States
+      - HTTPPROXY=on
+      - HTTPPROXY_LISTENING_ADDRESS=:8888
+      - TZ=America/New_York
+    volumes:
+      - ${GLUETUN_CONFIG}:/gluetun
+    networks:
+      servarr:
+    ports:
+      - 8090:8090
+    restart: unless-stopped
+
+  qbittorrent:
+    container_name: qbittorrent
+    image: lscr.io/linuxserver/qbittorrent:5.2.4
+    network_mode: service:gluetun
+    depends_on:
+      gluetun:
+        condition: service_healthy
+        restart: true
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - WEBUI_PORT=8090
+    volumes:
+      - ${QBITTORRENT_CONFIG}:/config
+      - ${USENET_DOWNLOADS}:/downloads
+      - ${WHISPARR_MOVIES}/generic:/xxx-generic
+    restart: unless-stopped
+
   radarr:
     container_name: radarr
     image: lscr.io/linuxserver/radarr:6.1.1
