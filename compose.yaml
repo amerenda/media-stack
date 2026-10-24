@@ -105,6 +105,20 @@ services:
       - ${WHISPARR_MOVIES}/generic:/xxx-generic
     restart: unless-stopped
 
+  # Prowlarr reaches it at gluetun:8191; its traffic exits through NordVPN.
+  flaresolverr:
+    container_name: flaresolverr
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
+    network_mode: service:gluetun
+    depends_on:
+      gluetun:
+        condition: service_healthy
+        restart: true
+    environment:
+      - LOG_LEVEL=info
+      - TZ=America/New_York
+    restart: unless-stopped
+
   radarr:
     container_name: radarr
     image: lscr.io/linuxserver/radarr:6.1.1
