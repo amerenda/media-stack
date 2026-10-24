@@ -228,7 +228,7 @@ services:
 
   whisparr:
     container_name: whisparr
-    image: thespad/whisparr:v3
+    image: thespad/whisparr:v3.6.5-release.1886-spad60
     ports:
       - 6969:6969
     volumes:
