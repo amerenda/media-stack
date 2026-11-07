@@ -211,7 +211,7 @@ services:
     restart: "no"
 
   jellyfin:
-    image: jellyfin/jellyfin:12.4
+    image: lscr.io/linuxserver/jellyfin:version-12.4ubu2604
     container_name: jellyfin
     networks:
       servarr:
