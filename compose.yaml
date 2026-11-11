@@ -196,6 +196,7 @@ services:
     # Jellyfin rewrites its own config, so versioned files are copied in
     # (not bind-mounted) on every deploy. See CLAUDE.md "anime plugins".
     container_name: jellyfin-config-init
+    profiles: ["murderbot-jellyfin"]
     image: busybox:1.37
     user: "1000:1000"
     command:
@@ -213,6 +214,8 @@ services:
   jellyfin:
     image: lscr.io/linuxserver/jellyfin:version-12.4ubu2604
     container_name: jellyfin
+    # Runs on k3s (dean-tofu k3s/apps/prod/jellyfin-private); enable this profile only to roll back.
+    profiles: ["murderbot-jellyfin"]
     networks:
       servarr:
     dns: *dns-servers
