@@ -1,0 +1,3 @@
+# Daily 2am America/New_York: search replacements for anime-profile episodes
+# scoring below the profile minimum, worst first, MAX_EPISODES per run.
+0 2 * * * python3 /scripts/anime-upgrade-search.py > /proc/1/fd/1 2>&1
