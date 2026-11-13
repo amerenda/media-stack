@@ -162,16 +162,19 @@ services:
     restart: unless-stopped
 
   sonarr-missing-search-cron:
-    # Sonarr has no built-in recurring "search for missing episodes" task —
-    # see murderbot/media-server/config/sonarr-cron/crontab.txt for why this
-    # exists. Same crond shape as mac-mini-m4/docker-maintenance.
+    # Sonarr has no built-in recurring "search for missing episodes" task;
+    # see config/sonarr-cron/crontab.txt.
     container_name: sonarr-missing-search-cron
-    image: docker:27-cli
-    command: ["sh", "-c", "crond -f -l 8"]
+    image: python:3.13.17-alpine3.24
+    command: ["crond", "-f", "-l", "8"]
     environment:
       - SONARR_API_KEY=${SONARR_API_KEY}
+      - PROWLARR_API_KEY=${PROWLARR_API_KEY}
+      - TZ=EST5EDT,M3.2.0,M11.1.0
     volumes:
       - ./config/sonarr-cron/crontab.txt:/etc/crontabs/root:ro
+      - ./scripts/sonarr-budgeted-search.py:/scripts/sonarr-budgeted-search.py:ro
+      - ${CONFIG_BASE}/sonarr-search-state:/state
     networks:
       servarr:
     dns: *dns-servers
@@ -183,11 +186,12 @@ services:
     command: ["crond", "-f", "-l", "8"]
     environment:
       - SONARR_API_KEY=${SONARR_API_KEY}
+      - PROWLARR_API_KEY=${PROWLARR_API_KEY}
       - TZ=EST5EDT,M3.2.0,M11.1.0
-      - MAX_EPISODES=10
     volumes:
       - ./config/anime-upgrade-cron/crontab.txt:/etc/crontabs/root:ro
-      - ./scripts/anime-upgrade-search.py:/scripts/anime-upgrade-search.py:ro
+      - ./scripts/sonarr-budgeted-search.py:/scripts/sonarr-budgeted-search.py:ro
+      - ${CONFIG_BASE}/sonarr-search-state:/state
     networks:
       servarr:
     dns: *dns-servers
