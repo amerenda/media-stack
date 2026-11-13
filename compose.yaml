@@ -177,6 +177,22 @@ services:
     dns: *dns-servers
     restart: unless-stopped
 
+  anime-upgrade-cron:
+    container_name: anime-upgrade-cron
+    image: python:3.13.17-alpine3.24
+    command: ["crond", "-f", "-l", "8"]
+    environment:
+      - SONARR_API_KEY=${SONARR_API_KEY}
+      - TZ=EST5EDT,M3.2.0,M11.1.0
+      - MAX_EPISODES=10
+    volumes:
+      - ./config/anime-upgrade-cron/crontab.txt:/etc/crontabs/root:ro
+      - ./scripts/anime-upgrade-search.py:/scripts/anime-upgrade-search.py:ro
+    networks:
+      servarr:
+    dns: *dns-servers
+    restart: unless-stopped
+
   bazarr:
     container_name: bazarr
     image: linuxserver/bazarr:1.5.6
