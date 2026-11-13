@@ -10,13 +10,16 @@ x-dns: &dns-servers
 services:
   profilarr:
     container_name: profilarr
-    image: santiagosayshey/profilarr:v1.1.4
+    image: ghcr.io/dictionarry-hub/profilarr:2.3.1
     ports:
       - 6868:6868
     volumes:
       - ${PROFILARR_CONFIG}:/config
     environment:
       - TZ=America/New_York
+      - PUID=1000
+      - PGID=1000
+      - PROFILARR_API_KEY=${PROFILARR_API_KEY}
     networks:
       servarr:
     dns: *dns-servers
