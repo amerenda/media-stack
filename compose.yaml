@@ -319,6 +319,27 @@ services:
       - 6246:6246
     restart: unless-stopped
 
+  maintainerr-sync:
+    # One-shot: writes config/maintainerr/rules.toml (rule groups, keep-tag
+    # protection, job schedules) to Maintainerr on every deploy, then exits.
+    # Exit 1 means nothing or only part was written: read its log.
+    container_name: maintainerr-sync
+    image: python:3.13.17-alpine3.24
+    user: "1000:1000"
+    command: ["python3", "-I", "/scripts/maintainerr-sync.py"]
+    environment:
+      - MAINTAINERR_API_KEY=${MAINTAINERR_API_KEY}
+      - PYTHONDONTWRITEBYTECODE=1
+    volumes:
+      - ./config/maintainerr:/config:ro
+      - ./scripts/maintainerr-sync.py:/scripts/maintainerr-sync.py:ro
+    depends_on:
+      - maintainerr
+    networks:
+      servarr:
+    dns: *dns-servers
+    restart: "no"
+
   whisparr:
     container_name: whisparr
     image: thespad/whisparr:v3.6.5-release.1886-spad60
