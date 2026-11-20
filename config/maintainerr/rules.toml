@@ -1,0 +1,166 @@
+# Maintainerr rule groups and job schedules. This file is the source of truth.
+#
+# The maintainerr-sync service (scripts/maintainerr-sync.py) writes this file to
+# Maintainerr on each deploy of the stack. A change in the Maintainerr UI is
+# overwritten at the next deploy: change this file and merge a PR.
+#
+# keep tag: an item with the tag "keep" in Sonarr or Radarr is never deleted.
+# The last condition of each rule section must be
+#   AND Sonarr.tags NOT_CONTAINS keep   (show groups)
+#   AND Radarr.tags NOT_CONTAINS keep   (movie groups)
+# maintainerr-sync stops with an error if a group does not have it.
+#
+# `rules` is Maintainerr's own rule YAML (Rules > Export in the UI gives the same
+# format). Maintainerr decodes it, so the field names are the Maintainerr names.
+#
+# maintainerr-sync updates only the groups named here, matched by name. It does not
+# create or delete groups. It stops if a group is missing, if Maintainerr has a group
+# that is not in this file, or if library_id or data_type differ (Maintainerr would
+# empty the collection).
+
+[settings]
+# The rules run at :59 each hour, so each delete run (00:00 and 12:00) comes
+# directly after a new check of the Sonarr and Radarr tags. Rule runs and delete
+# runs share a lock and never overlap.
+rules_handler_job_cron = "59 * * * *"
+collection_handler_job_cron = "0 0-23/12 * * *"
+
+[[rule_group]]
+name = "Movies (Unwatched)"
+library_id = "f137a2dd21bbc1b99aa5c0f6bf02a805"
+data_type = "movie"
+active = true
+arr_action = "UNMONITOR_DELETE_ALL"
+delete_after_days = 0
+list_exclusions = true
+radarr_settings_id = 1
+rules = '''
+mediaType: MOVIES
+rules:
+  - "0":
+      - firstValue: Seerr.isRequested
+        action: EQUALS
+        customValue:
+          type: boolean
+          value: "true"
+      - operator: AND
+        firstValue: Jellyfin.lastViewedAt
+        action: NOT_EXISTS
+      - operator: AND
+        firstValue: Seerr.mediaAddedAt
+        action: BEFORE
+        customValue:
+          type: custom_days
+          value: "30"
+      - operator: AND
+        firstValue: Radarr.tags
+        action: NOT_CONTAINS
+        customValue:
+          type: text
+          value: keep
+'''
+
+[[rule_group]]
+name = "Movies (Watched)"
+library_id = "f137a2dd21bbc1b99aa5c0f6bf02a805"
+data_type = "movie"
+active = true
+arr_action = "UNMONITOR_DELETE_ALL"
+delete_after_days = 0
+list_exclusions = true
+radarr_settings_id = 1
+rules = '''
+mediaType: MOVIES
+rules:
+  - "0":
+      - firstValue: Seerr.isRequested
+        action: EQUALS
+        customValue:
+          type: boolean
+          value: "true"
+      - operator: AND
+        firstValue: Jellyfin.lastViewedAt
+        action: EXISTS
+      - operator: AND
+        firstValue: Jellyfin.lastViewedAt
+        action: BEFORE
+        customValue:
+          type: custom_days
+          value: "120"
+      - operator: AND
+        firstValue: Radarr.tags
+        action: NOT_CONTAINS
+        customValue:
+          type: text
+          value: keep
+'''
+
+[[rule_group]]
+name = "Shows (Unwatched)"
+library_id = "a656b907eb3a73532e40e44b968d0225"
+data_type = "show"
+active = true
+arr_action = "UNMONITOR_DELETE_ALL"
+delete_after_days = 0
+list_exclusions = true
+sonarr_settings_id = 1
+rules = '''
+mediaType: SHOWS
+rules:
+  - "0":
+      - firstValue: Seerr.isRequested
+        action: EQUALS
+        customValue:
+          type: boolean
+          value: "true"
+      - operator: AND
+        firstValue: Jellyfin.lastViewedAt
+        action: NOT_EXISTS
+      - operator: AND
+        firstValue: Seerr.mediaAddedAt
+        action: BEFORE
+        customValue:
+          type: custom_days
+          value: "30"
+      - operator: AND
+        firstValue: Sonarr.tags
+        action: NOT_CONTAINS
+        customValue:
+          type: text
+          value: keep
+'''
+
+[[rule_group]]
+name = "Shows (Watched)"
+library_id = "a656b907eb3a73532e40e44b968d0225"
+data_type = "show"
+active = true
+arr_action = "UNMONITOR_DELETE_ALL"
+delete_after_days = 0
+list_exclusions = true
+sonarr_settings_id = 1
+rules = '''
+mediaType: SHOWS
+rules:
+  - "0":
+      - firstValue: Seerr.isRequested
+        action: EQUALS
+        customValue:
+          type: boolean
+          value: "true"
+      - operator: AND
+        firstValue: Jellyfin.lastViewedAt
+        action: EXISTS
+      - operator: AND
+        firstValue: Jellyfin.lastViewedAt
+        action: BEFORE
+        customValue:
+          type: custom_days
+          value: "120"
+      - operator: AND
+        firstValue: Sonarr.tags
+        action: NOT_CONTAINS
+        customValue:
+          type: text
+          value: keep
+'''
