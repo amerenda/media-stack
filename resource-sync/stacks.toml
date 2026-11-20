@@ -29,8 +29,8 @@ repo = "amerenda/media-stack"
 branch = "main"
 file_paths = ["compose.yaml"]
 additional_env_files = ["paths.env"]
-# One-shot copy container; exits 0 by design, must not mark the stack unhealthy.
-ignore_services = ["jellyfin-config-init"]
+# One-shot containers; they exit by design and must not mark the stack unhealthy.
+ignore_services = ["jellyfin-config-init", "maintainerr-sync"]
 git_account = "amerenda"
 project_name = "media-server"
 webhook_force_deploy = true
