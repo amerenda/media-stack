@@ -127,7 +127,7 @@ services:
 
   radarr:
     container_name: radarr
-    image: lscr.io/linuxserver/radarr:7.0.3
+    image: lscr.io/linuxserver/radarr:6.4.4
     networks:
       servarr:
     dns: *dns-servers
