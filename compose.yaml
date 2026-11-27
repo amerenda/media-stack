@@ -127,7 +127,7 @@ services:
 
   radarr:
     container_name: radarr
-    image: lscr.io/linuxserver/radarr:6.1.1
+    image: lscr.io/linuxserver/radarr:7.0.3
     networks:
       servarr:
     dns: *dns-servers
@@ -144,7 +144,7 @@ services:
     restart: unless-stopped
 
   sonarr:
-    image: linuxserver/sonarr:4.0.17
+    image: linuxserver/sonarr:4.0.20
     container_name: sonarr
     networks:
       servarr:
